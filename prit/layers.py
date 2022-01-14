@@ -66,6 +66,16 @@ class PatchConv(PatchDownsample):
         self.num_patches = num_patches
 
 
+class PatchOverlapConv(PatchDownsample):
+    def __init__(self, dim_in, dim_out, stride, norm_layer=nn.LayerNorm, num_patches=None):
+        assert stride == 1 or stride == 2
+        super().__init__()
+        self.pool = nn.Conv2d(dim_in, dim_out, 3, stride=stride, padding=1)
+        self.reduction = nn.Identity()
+        self.norm = norm_layer(dim_out)
+        self.num_patches = num_patches
+
+
 class PatchDWConv(PatchDownsample):
     def __init__(self, dim_in, dim_out, stride, norm_layer=nn.LayerNorm, num_patches=None):
         assert stride == 1 or stride == 2

@@ -162,6 +162,9 @@ def main(args):
     model_without_ddp = model
     print("Model = %s" % str(model_without_ddp))
 
+    n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print('number of params: {} M'.format(n_parameters / 1e6))
+
     eff_batch_size = args.batch_size * args.accum_iter * misc.get_world_size()
 
     if args.lr is None:  # only base_lr is specified

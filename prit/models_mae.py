@@ -19,11 +19,11 @@ from timm.models.vision_transformer import PatchEmbed
 
 from util.pos_embed import get_2d_sincos_pos_embed
 
-from .layers import Block, LocalBlock, PatchPool, PatchConv, PatchDWConv
+from .layers import Block, LocalBlock, PatchPool, PatchConv, PatchOverlapConv, PatchDWConv
 
 
 BLOCKS = {'normal': Block, 'local': LocalBlock}
-PATCH_DOWNSAMPLE = {'pool': PatchPool, 'conv': PatchConv, 'dwconv': PatchDWConv}
+PATCH_DOWNSAMPLE = {'pool': PatchPool, 'conv': PatchConv, 'overlap_conv': PatchOverlapConv, 'dwconv': PatchDWConv}
 
 
 class MaskedAutoencoderPriT(nn.Module):
@@ -34,7 +34,8 @@ class MaskedAutoencoderPriT(nn.Module):
                  mlp_ratio=4., norm_layer=nn.LayerNorm, norm_pix_loss=False,
                  # args for PriT
                  strides=(1, 2, 2, 2), depths=(2, 2, 6, 2), dims=(256, 512, 1024, 2048),
-                 num_heads=(4, 8, 16, 32), patch_downsample='pool',
+                 num_heads=(4, 8, 16, 32),
+                 downsamples=('pool', 'pool', 'pool'),
                  blocks=('normal', 'normal', 'normal', 'normal')):
         super().__init__()
         self.out_patch_size = patch_size * reduce(mul, strides)
@@ -49,8 +50,8 @@ class MaskedAutoencoderPriT(nn.Module):
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches, dims[0]), requires_grad=False)  # fixed sin-cos embedding
 
         stages = []
-        downsample = partial(PATCH_DOWNSAMPLE[patch_downsample], num_patches=lambda:self.num_visible)
         for i in range(len(depths)):
+            downsample = partial(PATCH_DOWNSAMPLE[downsamples[i - 1]], num_patches=lambda:self.num_visible)
             block = partial(BLOCKS[blocks[i]], num_patches=lambda:self.num_visible)
             stages.append(nn.Sequential(
                 downsample(dims[i - 1], dims[i], strides[i], norm_layer=norm_layer)
@@ -251,28 +252,36 @@ class MaskedAutoencoderPriT(nn.Module):
 def mae_vit_small_patch16_dec192d4b(**kwargs):
     model = MaskedAutoencoderPriT(
         patch_size=16, mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6),
-        strides=(1, 1, 1, 1), depths=(2, 2, 6, 2), dims=(384,384,384,384), num_heads=(6, 6, 6, 6),
+        strides=(1, 1, 1, 1), depths=(2, 2, 6, 2), dims=(384, 384, 384, 384), num_heads=(6, 6, 6, 6),
+        decoder_embed_dim=192, decoder_depth=4, decoder_num_heads=3, **kwargs)
+    return model
+
+
+def mae_vit_base_patch16_dec512d8b(**kwargs):
+    model = MaskedAutoencoderPriT(
+        patch_size=16, mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        strides=(1, 1, 1, 1), depths=(2, 2, 6, 2), dims=(768, 768, 768, 768), num_heads=(12, 12, 12, 12),
+        decoder_embed_dim=512, decoder_depth=8, decoder_num_heads=8, **kwargs)
+    return model
+
+
+def mae_prit_small_dec192d4b(**kwargs):
+    model = MaskedAutoencoderPriT(
+        patch_size=4, mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6),
+        strides=(1, 2, 2, 2), depths=(2, 2, 7, 1), dims=(96, 192, 384, 768), num_heads=(2, 4, 8, 16),
         decoder_embed_dim=192, decoder_depth=4, decoder_num_heads=4, **kwargs)
     return model
 
 
-def mae_prit_small_patch16_dec192d4b(**kwargs):
+def mae_prit_base_dec512d8b(**kwargs):
     model = MaskedAutoencoderPriT(
         patch_size=4, mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6),
-        strides=(1, 2, 2, 2), depths=(2, 2, 6, 2), dims=(96, 192, 384, 768), num_heads=(2, 4, 8, 16),
-        decoder_embed_dim=192, decoder_depth=4, decoder_num_heads=4, **kwargs)
-    return model
-
-
-def mae_prit_base_patch16_dec512d8b(**kwargs):
-    model = MaskedAutoencoderPriT(
-        patch_size=4, mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6),
-        strides=(1, 2, 2, 2), depths=(2, 2, 6, 2), dims=(192, 384, 768, 1536), num_heads=(3, 6, 12, 24),
+        strides=(1, 2, 2, 2), depths=(2, 2, 7, 1), dims=(192, 384, 768, 1536), num_heads=(3, 6, 12, 24),
         decoder_embed_dim=512, decoder_depth=8, decoder_num_heads=16, **kwargs)
     return model
 
 
-def mae_prit_large_patch16_dec512d8b(**kwargs):
+def mae_prit_large_dec512d8b(**kwargs):
     model = MaskedAutoencoderPriT(
         patch_size=4, mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), 
         strides=(1, 2, 2, 2), depths=(4, 4, 12, 4), dims=(256, 512, 1024, 2048), num_heads=(4, 8, 16, 32),
@@ -281,7 +290,25 @@ def mae_prit_large_patch16_dec512d8b(**kwargs):
 
 
 # set recommended archs
-mae_vit_small_patch16 = mae_vit_small_patch16_dec192d4b  # decoder: 192 dim, 4 blocks
-mae_prit_small_patch16 = mae_prit_small_patch16_dec192d4b  # decoder: 192 dim, 4 blocks
-mae_prit_base_patch16 = mae_prit_base_patch16_dec512d8b  # decoder: 512 dim, 8 blocks
-mae_prit_large_patch16 = mae_prit_large_patch16_dec512d8b  # decoder: 512 dim, 8 blocks
+# small
+mae_vit_small_patch16 = mae_vit_small_patch16_dec192d4b  # 23.591808 M
+mae_prit_small = mae_prit_small_dec192d4b                # 23.539104 M
+mae_prit_small_LGGG = partial(mae_prit_small,
+    blocks=('local', 'normal', 'normal', 'normal'))
+mae_prit_small_LGGG_conv = partial(mae_prit_small,
+    downsamples=('overlap_conv', 'conv', 'conv'), blocks=('local', 'normal', 'normal', 'normal'))  # 24.793824 M
+mae_prit_small_LGGG_dwconv = partial(mae_prit_small,
+    downsamples=('dwconv', 'dwconv', 'dwconv'), blocks=('local', 'normal', 'normal', 'normal'))    # 23.542464 M
+
+# base
+mae_vit_base_patch16 = mae_vit_base_patch16_dec512d8b  # 111.654912 M
+mae_prit_base = mae_prit_base_dec512d8b                # 111.534912 M
+mae_prit_base_LGGG = partial(mae_prit_base,
+    blocks=('local', 'normal', 'normal', 'normal'))
+mae_prit_base_LGGG_conv = partial(mae_prit_base,
+    downsamples=('overlap_conv', 'conv', 'conv'), blocks=('local', 'normal', 'normal', 'normal'))  # 116.551104 M
+mae_prit_base_LGGG_dwconv = partial(mae_prit_base,
+    downsamples=('dwconv', 'dwconv', 'dwconv'), blocks=('local', 'normal', 'normal', 'normal'))    # 111.541632 M
+
+# large
+mae_prit_large = mae_prit_large_dec512d8b  # decoder: 512 dim, 8 blocks
