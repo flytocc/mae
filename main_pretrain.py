@@ -133,7 +133,7 @@ def main(args):
     print("Sampler_train = %s" % str(sampler_train))
 
     if global_rank == 0 and args.log_wandb:
-        log_writer = WandbLogger(args, wandb_entity=args.wandb_entity, wandb_project=args.wandb_project)
+        log_writer = WandbLogger(args, entity=args.wandb_entity, project=args.wandb_project)
     else:
         log_writer = None
 
