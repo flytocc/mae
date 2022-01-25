@@ -9,13 +9,11 @@
 # DeiT: https://github.com/facebookresearch/deit
 # --------------------------------------------------------
 
-import math
 from functools import partial
 
 import paddle
 import paddle.nn as nn
-from paddle.nn.initializer import Constant, Normal, Uniform, XavierUniform
-from paddle.fluid.initializer import Initializer
+from paddle.nn.initializer import Constant, KaimingUniform, Normal, XavierUniform
 
 from layer import Block, PatchEmbed, paddle_gather
 
@@ -41,11 +39,9 @@ class MaskedAutoencoderViT(nn.Layer):
         self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)
         num_patches = self.patch_embed.num_patches
 
-        self.cls_token = self.create_parameter([1, 1, embed_dim])
-
-        # initialize (and freeze) pos_embed by sin-cos embedding
-        pos_embed = get_2d_sincos_pos_embed(embed_dim, int(num_patches**.5), cls_token=True)
-        self.register_buffer('pos_embed', paddle.to_tensor(pos_embed, dtype=paddle.float32).unsqueeze(0))
+        self.cls_token = self.create_parameter([1, 1, embed_dim], is_bias=True)
+        self.pos_embed = self.create_parameter([1, num_patches + 1, embed_dim], is_bias=True)
+        self.pos_embed.stop_gradient = True  # fixed sin-cos embedding
 
         self.blocks = nn.LayerList([
             Block(embed_dim, num_heads, mlp_ratio, qkv_bias=True, qk_scale=None, norm_layer=norm_layer)
@@ -57,11 +53,9 @@ class MaskedAutoencoderViT(nn.Layer):
         # MAE decoder specifics
         self.decoder_embed = nn.Linear(embed_dim, decoder_embed_dim, bias_attr=True)
 
-        self.mask_token = self.create_parameter([1, 1, decoder_embed_dim])
-
-        # initialize (and freeze) pos_embed by sin-cos embedding
-        decoder_pos_embed = get_2d_sincos_pos_embed(decoder_embed_dim, int(num_patches**.5), cls_token=True)
-        self.register_buffer('decoder_pos_embed', paddle.to_tensor(decoder_pos_embed, dtype=paddle.float32).unsqueeze(0))
+        self.mask_token = self.create_parameter([1, 1, decoder_embed_dim], is_bias=True)
+        self.decoder_pos_embed = self.create_parameter([1, num_patches + 1, decoder_embed_dim], is_bias=True)
+        self.decoder_pos_embed.stop_gradient = True  # fixed sin-cos embedding
 
         self.decoder_blocks = nn.LayerList([
             Block(decoder_embed_dim, decoder_num_heads, mlp_ratio, qkv_bias=True, qk_scale=None, norm_layer=norm_layer)
@@ -77,12 +71,17 @@ class MaskedAutoencoderViT(nn.Layer):
 
     def initialize_weights(self):
         # initialization
+        # initialize (and freeze) pos_embed by sin-cos embedding
+        pos_embed = get_2d_sincos_pos_embed(self.pos_embed.shape[-1], int(self.patch_embed.num_patches**.5), cls_token=True)
+        self.pos_embed.set_value(paddle.to_tensor(pos_embed, dtype=paddle.float32).unsqueeze(0))
+
+        decoder_pos_embed = get_2d_sincos_pos_embed(self.decoder_pos_embed.shape[-1], int(self.patch_embed.num_patches**.5), cls_token=True)
+        self.decoder_pos_embed.set_value(paddle.to_tensor(decoder_pos_embed, dtype=paddle.float32).unsqueeze(0))
+
         # initialize patch_embed like nn.Linear (instead of nn.Conv2d)
-        proj = self.patch_embed.proj
-        fan_in, fan_out = Initializer()._compute_fans(proj.weight.flatten(1))
-        w_bound, b_bound = math.sqrt(6.0 / float(fan_in + fan_out)), math.sqrt(1.0 / fan_in)
-        Uniform(-w_bound, w_bound)(proj.weight)
-        Uniform(-b_bound, b_bound)(proj.bias)
+        fan_out, fan_in = self.patch_embed.proj.weight.flatten(1).shape
+        XavierUniform(fan_in, fan_out)(self.patch_embed.proj.weight)
+        KaimingUniform(6 * fan_in)(self.patch_embed.proj.bias)
 
         # timm's trunc_normal_(std=.02) is effectively normal_(std=0.02) as cutoff is too big (2.)
         Normal(std=.02)(self.cls_token)

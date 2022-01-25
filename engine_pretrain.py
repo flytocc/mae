@@ -63,7 +63,7 @@ def train_one_epoch(model: paddle.nn.Layer,
         metric_logger.update(lr=lr)
 
         loss_value_reduce = misc.all_reduce_mean(loss_value)
-        if log_writer is not None:
+        if data_iter_step % accum_iter == 0 and log_writer is not None:
             log_writer.update({'loss': loss_value_reduce, 'lr': lr})
             log_writer.set_step()
 

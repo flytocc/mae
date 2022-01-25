@@ -11,9 +11,9 @@
 
 import builtins
 import datetime
+import os
 import time
 from collections import defaultdict, deque
-from pathlib import Path
 
 import paddle
 import paddle.amp as amp
@@ -264,16 +264,17 @@ def save_model(args, epoch, model_without_ddp, optimizer, loss_scaler, tag=None)
     }
     if loss_scaler is not None:
         to_save['scaler'] = loss_scaler.state_dict()
-    save_on_master(to_save, Path(args.output_dir) / f'checkpoint-{tag or epoch}.pd')
+    os.makedirs(args.output_dir, exist_ok=True)
+    save_on_master(to_save, os.path.join(args.output_dir, f'checkpoint-{tag or epoch}.pd'))
 
 
 def load_model(args, model_without_ddp, optimizer, loss_scaler):
     if args.resume:
         checkpoint = paddle.load(args.resume)
-        model_without_ddp.load_state_dict(checkpoint['model'])
+        model_without_ddp.set_state_dict(checkpoint['model'])
         print("Resume checkpoint %s" % args.resume)
         if 'optimizer' in checkpoint and 'epoch' in checkpoint and not (hasattr(args, 'eval') and args.eval):
-            optimizer.load_state_dict(checkpoint['optimizer'])
+            optimizer.set_state_dict(checkpoint['optimizer'])
             args.start_epoch = checkpoint['epoch'] + 1
             if 'scaler' in checkpoint:
                 loss_scaler.load_state_dict(checkpoint['scaler'])
