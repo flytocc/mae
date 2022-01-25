@@ -163,13 +163,14 @@ def main(args):
     model_without_ddp = model._layers
 
     # following timm: set wd as 0 for bias and norm layers
-    no_decay = [name for name, param in model.named_parameters() if len(param.shape) == 1 or name.endswith(".bias")]
+    decay_dict = {param.name: not (len(param.shape) == 1 or name.endswith(".bias"))
+                  for name, param in model_without_ddp.named_parameters()}
     optimizer = optim.AdamW(
         learning_rate=args.lr,
         beta2=0.95,
         parameters=model.parameters(),
         weight_decay=args.weight_decay,
-        apply_decay_param_fun=lambda x: x not in no_decay
+        apply_decay_param_fun=lambda n: decay_dict[n]
     )
     print(optimizer)
     loss_scaler = NativeScaler()
@@ -198,7 +199,12 @@ def main(args):
                     loss_scaler=loss_scaler, epoch=epoch)
 
         if log_writer is not None:
-            log_writer.update({**{k: v for k, v in train_stats.items()}, 'epoch': epoch})
+            log_stats = {
+                **{k: v for k, v in train_stats.items()},
+                'epoch': epoch,
+                'n_parameters': n_parameters
+            }
+            log_writer.update(log_stats)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
