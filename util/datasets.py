@@ -9,19 +9,19 @@
 # --------------------------------------------------------
 
 import os
-import PIL
 
-from torchvision import datasets, transforms
+from util.data import create_transform
+from util.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 
-from timm.data import create_transform
-from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+import paddle.vision.transforms as transforms
+import paddle.vision.datasets as datasets
 
 
 def build_dataset(is_train, args):
     transform = build_transform(is_train, args)
 
-    root = os.path.join(args.data_path, 'train' if is_train else 'val')
-    dataset = datasets.ImageFolder(root, transform=transform)
+    root = os.path.join(args.data_path, 'train' if is_train and not args.debug else 'val')
+    dataset = datasets.DatasetFolder(root, transform=transform)
 
     print(dataset)
 
@@ -56,7 +56,7 @@ def build_transform(is_train, args):
         crop_pct = 1.0
     size = int(args.input_size / crop_pct)
     t.append(
-        transforms.Resize(size, interpolation=PIL.Image.BICUBIC),  # to maintain same ratio w.r.t. 224 images
+        transforms.Resize(size, interpolation='bicubic'),  # to maintain same ratio w.r.t. 224 images
     )
     t.append(transforms.CenterCrop(args.input_size))
 

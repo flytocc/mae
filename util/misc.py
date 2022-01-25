@@ -207,11 +207,17 @@ class NativeScalerWithGradNormCount:
     def __init__(self):
         self._scaler = amp.GradScaler()
 
-    def __call__(self, loss, optimizer, parameters=None, create_graph=False, update_grad=True):
+    def __call__(self, loss, optimizer, clip_grad=None, parameters=None, create_graph=False, update_grad=True):
         self._scaler.scale(loss).backward(retain_graph=create_graph)
         if update_grad:
-            self._scaler.unscale_(optimizer)
-            norm = get_grad_norm_(parameters)
+            if clip_grad:
+                raise NotImplementedError
+                assert parameters is not None
+                self._scaler.unscale_(optimizer)  # unscale the gradients of optimizer's assigned params in-place
+                norm = torch.nn.utils.clip_grad_norm_(parameters, clip_grad)
+            else:
+                self._scaler.unscale_(optimizer)
+                norm = get_grad_norm_(parameters)
             self._scaler.step(optimizer)
             self._scaler.update()
         else:

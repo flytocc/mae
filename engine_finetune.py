@@ -13,21 +13,23 @@ import math
 import sys
 from typing import Iterable, Optional
 
-import torch
+import paddle
+import paddle.amp as amp
+import paddle.nn as nn
+import paddle.optimizer as optim
 
-from timm.data import Mixup
-from timm.utils import accuracy
+from util.data import Mixup
 
 import util.misc as misc
 import util.lr_sched as lr_sched
 
 
-def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
-                    data_loader: Iterable, optimizer: torch.optim.Optimizer,
-                    device: torch.device, epoch: int, loss_scaler, max_norm: float = 0,
+def train_one_epoch(model: nn.Layer, criterion: nn.Layer,
+                    data_loader: Iterable, optimizer: optim.Optimizer,
+                    epoch: int, loss_scaler, max_norm: float = 0,
                     mixup_fn: Optional[Mixup] = None, log_writer=None,
                     args=None):
-    model.train(True)
+    model.train()
     metric_logger = misc.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     header = 'Epoch: [{}]'.format(epoch)
@@ -35,24 +37,19 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
     accum_iter = args.accum_iter
 
-    optimizer.zero_grad()
-
-    if log_writer is not None:
-        print('log_dir: {}'.format(log_writer.log_dir))
+    optimizer.clear_grad()
 
     for data_iter_step, (samples, targets) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
 
         # we use a per iteration (instead of per epoch) lr scheduler
         if data_iter_step % accum_iter == 0:
-            lr_sched.adjust_learning_rate(optimizer, data_iter_step / len(data_loader) + epoch, args)
-
-        samples = samples.to(device, non_blocking=True)
-        targets = targets.to(device, non_blocking=True)
+            lr = lr_sched.adjust_learning_rate(optimizer, data_iter_step / len(data_loader) + epoch, args)
+            optimizer.set_lr(lr)
 
         if mixup_fn is not None:
             samples, targets = mixup_fn(samples, targets)
 
-        with torch.cuda.amp.autocast():
+        with amp.auto_cast():
             outputs = model(samples)
             loss = criterion(outputs, targets)
 
@@ -67,27 +64,17 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                     parameters=model.parameters(), create_graph=False,
                     update_grad=(data_iter_step + 1) % accum_iter == 0)
         if (data_iter_step + 1) % accum_iter == 0:
-            optimizer.zero_grad()
+            optimizer.clear_grad()
 
-        torch.cuda.synchronize()
+        paddle.device.cuda.synchronize()
 
         metric_logger.update(loss=loss_value)
-        min_lr = 10.
-        max_lr = 0.
-        for group in optimizer.param_groups:
-            min_lr = min(min_lr, group["lr"])
-            max_lr = max(max_lr, group["lr"])
-
-        metric_logger.update(lr=max_lr)
+        metric_logger.update(lr=lr)
 
         loss_value_reduce = misc.all_reduce_mean(loss_value)
-        if log_writer is not None and (data_iter_step + 1) % accum_iter == 0:
-            """ We use epoch_1000x as the x-axis in tensorboard.
-            This calibrates different curves when batch size changes.
-            """
-            epoch_1000x = int((data_iter_step / len(data_loader) + epoch) * 1000)
-            log_writer.add_scalar('loss', loss_value_reduce, epoch_1000x)
-            log_writer.add_scalar('lr', max_lr, epoch_1000x)
+        if data_iter_step % accum_iter == 0 and log_writer is not None:
+            log_writer.update({'loss': loss_value_reduce, 'lr': lr})
+            log_writer.set_step()
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
@@ -95,9 +82,9 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 
-@torch.no_grad()
-def evaluate(data_loader, model, device):
-    criterion = torch.nn.CrossEntropyLoss()
+@paddle.no_grad()
+def evaluate(data_loader, model):
+    criterion = nn.CrossEntropyLoss()
 
     metric_logger = misc.MetricLogger(delimiter="  ")
     header = 'Test:'
@@ -108,11 +95,9 @@ def evaluate(data_loader, model, device):
     for batch in metric_logger.log_every(data_loader, 10, header):
         images = batch[0]
         target = batch[-1]
-        images = images.to(device, non_blocking=True)
-        target = target.to(device, non_blocking=True)
 
         # compute output
-        with torch.cuda.amp.autocast():
+        with amp.auto_cast():
             output = model(images)
             loss = criterion(output, target)
 
@@ -128,3 +113,13 @@ def evaluate(data_loader, model, device):
           .format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+
+
+def accuracy(output, target, topk=(1,)):
+    """Computes the accuracy over the k top predictions for the specified values of k"""
+    maxk = min(max(topk), output.shape[1])
+    batch_size = target.shape[0]
+    _, pred = output.topk(maxk, 1, True, True)
+    pred = pred.t()
+    correct = pred == target.reshape([1, -1]).expand_as(pred)
+    return [correct[:min(k, maxk)].reshape([-1]).cast('float32').sum(0) * 100. / batch_size for k in topk]
