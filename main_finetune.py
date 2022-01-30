@@ -296,8 +296,8 @@ def main(args):
     max_accuracy = 0.0
     for epoch in range(args.start_epoch, args.epochs):
         if log_writer is not None:
-            num_training_steps_per_epoch = len(dataset_train) // eff_batch_size
-            log_writer.set_step(epoch * num_training_steps_per_epoch)
+            num_training_steps_per_epoch = len(dataset_train) // (args.batch_size * dist.get_world_size())
+            log_writer.set_step(epoch * num_training_steps_per_epoch // args.accum_iter)
         train_stats = train_one_epoch(
             model, criterion, data_loader_train,
             optimizer, epoch, loss_scaler,
