@@ -208,7 +208,8 @@ class NativeScalerWithGradNormCount:
         self._scaler = amp.GradScaler()
 
     def __call__(self, loss, optimizer, clip_grad=None, parameters=None, create_graph=False, update_grad=True):
-        self._scaler.scale(loss).backward(retain_graph=create_graph)
+        scaled = self._scaler.scale(loss)  # scale the loss
+        scaled.backward(retain_graph=create_graph)  # do backward
         if update_grad:
             if clip_grad:
                 raise NotImplementedError
@@ -218,8 +219,7 @@ class NativeScalerWithGradNormCount:
             else:
                 self._scaler.unscale_(optimizer)
                 norm = get_grad_norm_(parameters)
-            self._scaler.step(optimizer)
-            self._scaler.update()
+            self._scaler.minimize(optimizer, scaled)
         else:
             norm = None
         return norm

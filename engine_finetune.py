@@ -37,7 +37,10 @@ def train_one_epoch(model: nn.Layer, criterion: nn.Layer,
 
     accum_iter = args.accum_iter
 
-    optimizer.clear_grad()
+    if isinstance(optimizer, paddle.fluid.optimizer.Optimizer):
+        optimizer.clear_gradients()
+    else:
+        optimizer.clear_grad()
 
     for data_iter_step, (samples, targets) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
 
@@ -64,7 +67,10 @@ def train_one_epoch(model: nn.Layer, criterion: nn.Layer,
                     parameters=model.parameters(), create_graph=False,
                     update_grad=(data_iter_step + 1) % accum_iter == 0)
         if (data_iter_step + 1) % accum_iter == 0:
-            optimizer.clear_grad()
+            if isinstance(optimizer, paddle.fluid.optimizer.Optimizer):
+                optimizer.clear_gradients()
+            else:
+                optimizer.clear_grad()
 
         paddle.device.cuda.synchronize()
 

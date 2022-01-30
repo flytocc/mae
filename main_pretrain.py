@@ -117,6 +117,8 @@ def main(args):
     seed = args.seed + dist.get_rank()
     paddle.seed(args.seed)
     np.random.seed(seed)
+    if args.debug:
+        paddle.version.cudnn.FLAGS_cudnn_deterministic = True
 
     # simple augmentation
     transform_train = transforms.Compose([
@@ -179,7 +181,7 @@ def main(args):
 
     print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
-    for epoch in range(args.start_epoch, args.epochs):
+    for epoch in range(0 if args.debug else args.start_epoch, args.epochs):
         if log_writer is not None:
             num_training_steps_per_epoch = len(dataset_train) // (args.batch_size * dist.get_world_size())
             log_writer.set_step(epoch * num_training_steps_per_epoch // args.accum_iter)
