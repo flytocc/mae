@@ -202,7 +202,7 @@ def main(args):
 
         if log_writer is not None:
             log_stats = {
-                **{k: v for k, v in train_stats.items()},
+                **{f'train_{k}': v for k, v in train_stats.items()},
                 'epoch': epoch,
                 'n_parameters': n_parameters
             }
