@@ -33,7 +33,7 @@ def clear_grad_(optimizer: optim.Optimizer):
 
 def train_one_epoch(model: nn.Layer, criterion: nn.Layer,
                     data_loader: Iterable, optimizer: optim.Optimizer,
-                    epoch: int, loss_scaler, max_norm: float = 0,
+                    epoch: int, loss_scaler,
                     mixup_fn: Optional[Mixup] = None, log_writer=None,
                     args=None):
     model.train()
@@ -67,9 +67,8 @@ def train_one_epoch(model: nn.Layer, criterion: nn.Layer,
             sys.exit(1)
 
         loss /= accum_iter
-        loss_scaler(loss, optimizer, clip_grad=max_norm,
-                    parameters=model.parameters(), create_graph=False,
-                    update_grad=(data_iter_step + 1) % accum_iter == 0)
+        norm = loss_scaler(loss, optimizer, parameters=model.parameters(),
+                           update_grad=(data_iter_step + 1) % accum_iter == 0)
         if (data_iter_step + 1) % accum_iter == 0:
             clear_grad_(optimizer)
 
@@ -80,7 +79,7 @@ def train_one_epoch(model: nn.Layer, criterion: nn.Layer,
 
         loss_value_reduce = misc.all_reduce_mean(loss_value)
         if log_writer is not None and (data_iter_step + 1) % accum_iter == 0:
-            log_writer.update({'loss': loss_value_reduce, 'lr': lr})
+            log_writer.update({'loss': loss_value_reduce, 'lr': lr, 'norm': norm})
             log_writer.set_step()
 
     # gather the stats from all processes

@@ -151,7 +151,7 @@ def main(args):
     print('number of params: {} M'.format(n_parameters / 1e6))
 
     eff_batch_size = args.batch_size * args.accum_iter * dist.get_world_size()
-    
+
     if args.lr is None:  # only base_lr is specified
         args.lr = args.blr * eff_batch_size / 256
 

@@ -210,7 +210,7 @@ def main(args):
             mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax,
             prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode,
             label_smoothing=args.smoothing, num_classes=args.nb_classes)
-    
+
     model = models_vit.__dict__[args.model](
         num_classes=args.nb_classes,
         drop_path_rate=args.drop_path,
@@ -244,7 +244,7 @@ def main(args):
     print('number of params (M): %.2f' % (n_parameters / 1.e6))
 
     eff_batch_size = args.batch_size * args.accum_iter * dist.get_world_size()
-    
+
     if args.lr is None:  # only base_lr is specified
         args.lr = args.blr * eff_batch_size / 256
 
@@ -271,8 +271,9 @@ def main(args):
         learning_rate=args.lr,
         parameters=model.parameters(),
         weight_decay=args.weight_decay,
+        lr_ratio=lambda p: lr_ratio_dict[p.name],
         apply_decay_param_fun=lambda n: decay_dict[n],
-        lr_ratio=lambda p: lr_ratio_dict[p.name]
+        grad_clip=nn.ClipGradByGlobalNorm(args.clip_grad)
     )
     loss_scaler = NativeScaler()
 
@@ -303,7 +304,7 @@ def main(args):
         train_stats = train_one_epoch(
             model, criterion, data_loader_train,
             optimizer, epoch, loss_scaler,
-            args.clip_grad, mixup_fn,
+            mixup_fn,
             log_writer=log_writer,
             args=args
         )
