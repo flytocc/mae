@@ -24,7 +24,7 @@ from paddle.io import BatchSampler, DataLoader, DistributedBatchSampler
 from paddle.nn.initializer import TruncatedNormal
 
 from util.data.mixup import Mixup
-from util.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
+from util.loss import LabelSmoothingCrossEntropy
 
 import util.lr_decay as lrd
 import util.misc as misc
@@ -278,7 +278,7 @@ def main(args):
 
     if mixup_fn is not None:
         # smoothing is handled with mixup label transform
-        criterion = SoftTargetCrossEntropy()
+        criterion = nn.CrossEntropyLoss(soft_label=True)
     elif args.smoothing > 0.:
         criterion = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
     else:

@@ -15,9 +15,10 @@ import paddle
 import paddle.nn as nn
 from paddle.nn.initializer import Constant, KaimingUniform, Normal, XavierUniform
 
-from layer import Block, PatchEmbed, paddle_gather
+from layer import Block, PatchEmbed
 
 from util.pos_embed import get_2d_sincos_pos_embed
+from util.misc import paddle_gather
 
 
 xavier_uniform_ = XavierUniform()

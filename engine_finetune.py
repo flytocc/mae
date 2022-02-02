@@ -24,6 +24,13 @@ import util.misc as misc
 import util.lr_sched as lr_sched
 
 
+def clear_grad_(optimizer: optim.Optimizer):
+    if isinstance(optimizer, paddle.fluid.optimizer.Optimizer):
+        optimizer.clear_gradients()
+    else:
+        optimizer.clear_grad()
+
+
 def train_one_epoch(model: nn.Layer, criterion: nn.Layer,
                     data_loader: Iterable, optimizer: optim.Optimizer,
                     epoch: int, loss_scaler, max_norm: float = 0,
@@ -37,10 +44,7 @@ def train_one_epoch(model: nn.Layer, criterion: nn.Layer,
 
     accum_iter = args.accum_iter
 
-    if isinstance(optimizer, paddle.fluid.optimizer.Optimizer):
-        optimizer.clear_gradients()
-    else:
-        optimizer.clear_grad()
+    clear_grad_(optimizer)
 
     for data_iter_step, (samples, targets) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
 
@@ -67,10 +71,7 @@ def train_one_epoch(model: nn.Layer, criterion: nn.Layer,
                     parameters=model.parameters(), create_graph=False,
                     update_grad=(data_iter_step + 1) % accum_iter == 0)
         if (data_iter_step + 1) % accum_iter == 0:
-            if isinstance(optimizer, paddle.fluid.optimizer.Optimizer):
-                optimizer.clear_gradients()
-            else:
-                optimizer.clear_grad()
+            clear_grad_(optimizer)
 
         paddle.device.cuda.synchronize()
 

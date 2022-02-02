@@ -1,6 +1,7 @@
-import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
+
+from util.misc import paddle_gather
 
 
 class LabelSmoothingCrossEntropy(nn.Layer):
@@ -19,18 +20,8 @@ class LabelSmoothingCrossEntropy(nn.Layer):
 
     def forward(self, x, target):
         logprobs = F.log_softmax(x, axis=-1)
-        nll_loss = -logprobs.gather(axis=-1, index=target.unsqueeze(1))
+        nll_loss = paddle_gather(-logprobs, -1, target.unsqueeze(1))
         nll_loss = nll_loss.squeeze(1)
         smooth_loss = -logprobs.mean(axis=-1)
         loss = self.confidence * nll_loss + self.smoothing * smooth_loss
-        return loss.mean()
-
-
-class SoftTargetCrossEntropy(nn.Layer):
-
-    def __init__(self):
-        super(SoftTargetCrossEntropy, self).__init__()
-
-    def forward(self, x, target):
-        loss = paddle.sum(-target * F.log_softmax(x, axis=-1), axis=-1)
         return loss.mean()
