@@ -273,7 +273,7 @@ def main(args):
         weight_decay=args.weight_decay,
         lr_ratio=lambda p: lr_ratio_dict[p.name],
         apply_decay_param_fun=lambda n: decay_dict[n],
-        grad_clip=nn.ClipGradByGlobalNorm(args.clip_grad)
+        grad_clip=nn.ClipGradByGlobalNorm(args.clip_grad) if args.clip_grad is not None else None
     )
     loss_scaler = NativeScaler()
 
