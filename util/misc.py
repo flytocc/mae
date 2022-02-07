@@ -205,7 +205,11 @@ def setup_for_distributed(is_master):
 
 class NativeScalerWithGradNormCount:
     def __init__(self):
-        self._scaler = amp.GradScaler()
+        self._scaler = amp.GradScaler(
+            init_loss_scaling=2.**16,
+            incr_every_n_steps=2000,
+            decr_every_n_nan_or_inf=1,
+        )
 
     def __call__(self, loss, optimizer, parameters=None, create_graph=False, update_grad=True):
         scaled = self._scaler.scale(loss)  # scale the loss
