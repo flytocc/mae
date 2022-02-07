@@ -54,6 +54,7 @@ def train_one_epoch(model: paddle.nn.Layer,
         loss /= accum_iter
         norm = loss_scaler(loss, optimizer, parameters=model.parameters(),
                            update_grad=(data_iter_step + 1) % accum_iter == 0)
+        scale = loss_scaler.state_dict()['scale']
         if (data_iter_step + 1) % accum_iter == 0:
             optimizer.clear_grad()
 
@@ -64,7 +65,7 @@ def train_one_epoch(model: paddle.nn.Layer,
 
         loss_value_reduce = misc.all_reduce_mean(loss_value)
         if log_writer is not None and (data_iter_step + 1) % accum_iter == 0:
-            log_writer.update({'loss': loss_value_reduce, 'lr': lr, 'norm': norm})
+            log_writer.update({'loss': loss_value_reduce, 'lr': lr, 'norm': norm, 'scale': scale})
             log_writer.set_step()
 
     # gather the stats from all processes
