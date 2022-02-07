@@ -175,7 +175,7 @@ class MetricLogger(object):
                     meters=str(self),
                     time=str(iter_time), data=str(data_time))
                 print(msg)
-                if self.log_file and dist.get_rank() == 0:
+                if self.log_file and is_main_process():
                     with open(self.log_file, mode="a", encoding="utf-8") as f:
                         f.write(msg + '\n')
             i += 1
@@ -194,7 +194,7 @@ def setup_for_distributed(is_master):
 
     def print(*args, **kwargs):
         force = kwargs.pop('force', False)
-        force = force or (dist.get_world_size() > 8)
+        force = force or (get_world_size() > 8)
         if is_master or force:
             now = datetime.datetime.now().time()
             builtin_print('[{}] '.format(now), end='')  # print with time stamp
@@ -241,7 +241,7 @@ def get_grad_norm_(parameters, norm_type: float = 2.0):
 
 
 def all_reduce_mean(x):
-    world_size = dist.get_world_size()
+    world_size = get_world_size()
     if world_size > 1:
         x_reduce = paddle.to_tensor(x)
         dist.all_reduce(x_reduce)
@@ -251,8 +251,25 @@ def all_reduce_mean(x):
         return x
 
 
+def get_world_size():
+    return dist.get_world_size()
+
+
+def get_rank():
+    return dist.get_rank()
+
+
+def is_main_process():
+    return get_rank() == 0
+
+
+def init_distributed_mode(args):
+    dist.init_parallel_env()
+    setup_for_distributed(is_main_process())
+
+
 def save_on_master(*args, **kwargs):
-    if dist.get_rank() == 0:
+    if is_main_process():
         paddle.save(*args, **kwargs)
 
 

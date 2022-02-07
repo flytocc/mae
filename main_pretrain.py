@@ -10,13 +10,14 @@
 # --------------------------------------------------------
 import argparse
 import datetime
+import json
 import numpy as np
 import os
+import random
 import time
 from pathlib import Path
 
 import paddle
-import paddle.distributed as dist
 import paddle.vision.transforms as transforms
 import paddle.vision.datasets as datasets
 import paddle.optimizer as optim
@@ -107,16 +108,16 @@ def get_args_parser():
 
 
 def main(args):
-    dist.init_parallel_env()
-    misc.setup_for_distributed(dist.get_rank() == 0)
+    misc.init_distributed_mode(args)
 
     print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
     print("{}".format(args).replace(', ', ',\n'))
 
     # fix the seed for reproducibility
-    seed = args.seed + dist.get_rank()
+    seed = args.seed + misc.get_rank()
     paddle.seed(args.seed)
     np.random.seed(seed)
+    random.seed(seed)
     if args.debug:
         paddle.version.cudnn.FLAGS_cudnn_deterministic = True
 
@@ -129,7 +130,7 @@ def main(args):
     dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train' if not args.debug else 'val'), transform=transform_train)
     print(dataset_train)
 
-    global_rank = dist.get_rank()
+    global_rank = misc.get_rank()
     sampler_train = DistributedBatchSampler(
         dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True)
     print("Sampler_train = %s" % str(sampler_train))
@@ -150,7 +151,7 @@ def main(args):
     n_parameters = sum(p.numel() for p in model_without_ddp.parameters() if not p.stop_gradient)
     print('number of params: {} M'.format(n_parameters / 1e6))
 
-    eff_batch_size = args.batch_size * args.accum_iter * dist.get_world_size()
+    eff_batch_size = args.batch_size * args.accum_iter * misc.get_world_size()
 
     if args.lr is None:  # only base_lr is specified
         args.lr = args.blr * eff_batch_size / 256
@@ -200,13 +201,15 @@ def main(args):
                     args=args, model_without_ddp=model_without_ddp, optimizer=optimizer,
                     loss_scaler=loss_scaler, epoch=epoch)
 
-        if log_writer is not None:
-            log_stats = {
-                **{f'train_{k}': v for k, v in train_stats.items()},
-                'epoch': epoch,
-                'n_parameters': n_parameters
-            }
-            log_writer.update(log_stats)
+        log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
+                     'epoch': epoch, 'n_parameters': n_parameters}
+
+        if args.output_dir and misc.is_main_process():
+            if log_writer is not None:
+                log_writer.update(log_stats)
+                log_writer.flush()
+            with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
+                f.write(json.dumps(log_stats) + "\n")
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))

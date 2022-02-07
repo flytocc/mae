@@ -191,6 +191,7 @@ def create_transform(
         img_size = input_size
 
     if tf_preprocessing and use_prefetcher:
+        assert not separate, "Separate transforms not supported for TF preprocessing"
         raise NotImplementedError
     else:
         if is_training and no_aug:

@@ -11,14 +11,15 @@
 
 import argparse
 import datetime
+import json
 import numpy as np
 import os
+import random
 import time
 from pathlib import Path
 
 import paddle
 import paddle.nn as nn
-import paddle.distributed as dist
 import paddle.vision.transforms as transforms
 import paddle.vision.datasets as datasets
 from paddle.fluid.optimizer import LarsMomentumOptimizer
@@ -119,16 +120,16 @@ def get_args_parser():
 
 
 def main(args):
-    dist.init_parallel_env()
-    misc.setup_for_distributed(dist.get_rank() == 0)
+    misc.init_distributed_mode(args)
 
     print('job dir: {}'.format(os.path.dirname(os.path.realpath(__file__))))
     print("{}".format(args).replace(', ', ',\n'))
 
     # fix the seed for reproducibility
-    seed = args.seed + dist.get_rank()
+    seed = args.seed + misc.get_rank()
     paddle.seed(args.seed)
     np.random.seed(seed)
+    random.seed(seed)
     if args.debug:
         paddle.version.cudnn.FLAGS_cudnn_deterministic = True
 
@@ -148,10 +149,10 @@ def main(args):
     print(dataset_train)
     print(dataset_val)
 
-    num_tasks = dist.get_world_size()
-    global_rank = dist.get_rank()
+    num_tasks = misc.get_world_size()
+    global_rank = misc.get_rank()
     sampler_train = DistributedBatchSampler(
-        dataset_train, batch_size=args.batch_size, shuffle=True, drop_last=True)
+        dataset_train, args.batch_size, shuffle=True, drop_last=True)
     print("Sampler_train = %s" % str(sampler_train))
     if args.dist_eval:
         if len(dataset_val) % num_tasks != 0:
@@ -159,9 +160,9 @@ def main(args):
                   'This will slightly alter validation results as extra duplicate entries are added to achieve '
                   'equal num of samples per-process.')
         sampler_val = DistributedBatchSampler(
-            dataset_val, batch_size=args.batch_size, shuffle=True, drop_last=False)  # shuffle=True to reduce monitor bias
+            dataset_val, args.batch_size, shuffle=True, drop_last=False)  # shuffle=True to reduce monitor bias
     else:
-        sampler_val = BatchSampler(dataset_val, batch_size=args.batch_size)
+        sampler_val = BatchSampler(dataset=dataset_val, batch_size=args.batch_size)
 
     if global_rank == 0 and args.log_wandb and not args.eval:
         log_writer = WandbLogger(args, entity=args.wandb_entity, project=args.wandb_project)
@@ -213,7 +214,7 @@ def main(args):
     print("Model = %s" % str(model_without_ddp))
     print('number of params (M): %.2f' % (n_parameters / 1.e6))
 
-    eff_batch_size = args.batch_size * args.accum_iter * dist.get_world_size()
+    eff_batch_size = args.batch_size * args.accum_iter * misc.get_world_size()
 
     if args.lr is None:  # only base_lr is specified
         args.lr = args.blr * eff_batch_size / 256
@@ -274,14 +275,16 @@ def main(args):
         max_accuracy = max(max_accuracy, test_stats["acc1"])
         print(f'Max accuracy: {max_accuracy:.2f}%')
 
-        if log_writer is not None:
-            log_stats = {
-                **{f'train_{k}': v for k, v in train_stats.items()},
-                **{f'test_{k}': v for k, v in test_stats.items()},
-                'epoch': epoch,
-                'n_parameters': n_parameters
-            }
-            log_writer.update(log_stats)
+        log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
+                     **{f'test_{k}': v for k, v in test_stats.items()},
+                     'epoch': epoch, 'n_parameters': n_parameters}
+
+        if args.output_dir and misc.is_main_process():
+            if log_writer is not None:
+                log_writer.update(log_stats)
+                log_writer.flush()
+            with open(os.path.join(args.output_dir, "log.txt"), mode="a", encoding="utf-8") as f:
+                f.write(json.dumps(log_stats) + "\n")
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))

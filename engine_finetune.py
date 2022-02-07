@@ -50,7 +50,7 @@ def train_one_epoch(model: nn.Layer, criterion: nn.Layer,
 
         # we use a per iteration (instead of per epoch) lr scheduler
         if data_iter_step % accum_iter == 0:
-            lr = lr_sched.adjust_learning_rate(optimizer, data_iter_step / len(data_loader) + epoch, args)
+            lr = lr_sched.adjust_learning_rate(data_iter_step / len(data_loader) + epoch, args)
             optimizer.set_lr(lr)
 
         if mixup_fn is not None:

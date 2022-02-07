@@ -6,7 +6,7 @@
 
 import math
 
-def adjust_learning_rate(optimizer, epoch, args):
+def adjust_learning_rate(epoch, args):
     """Decay the learning rate with half-cycle cosine after warmup"""
     if epoch < args.warmup_epochs:
         lr = args.lr * epoch / args.warmup_epochs 
