@@ -209,7 +209,7 @@ def main(args):
         p.stop_gradient = False
 
     model_without_ddp = model
-    n_parameters = sum(p.numel() for p in model.parameters() if not p.stop_gradient)
+    n_parameters = sum(p.numel().item() for p in model.parameters() if not p.stop_gradient)
 
     print("Model = %s" % str(model_without_ddp))
     print('number of params (M): %.2f' % (n_parameters / 1.e6))
