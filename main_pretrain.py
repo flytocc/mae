@@ -83,25 +83,15 @@ def get_args_parser():
     parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
                         help='start epoch')
     parser.add_argument('--num_workers', default=10, type=int)
-    parser.add_argument('--pin_mem', action='store_true',
-                        help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
-    parser.add_argument('--no_pin_mem', action='store_false', dest='pin_mem')
-    parser.set_defaults(pin_mem=True)
 
-    # distributed training parameters
-    parser.add_argument('--world_size', default=1, type=int,
-                        help='number of distributed processes')
-    parser.add_argument('--local_rank', default=-1, type=int)
-    parser.add_argument('--dist_on_itp', action='store_true')
-    parser.add_argument('--dist_url', default='env://',
-                        help='url used to set up distributed training')
-
+    # logger parameters
     parser.add_argument('--log_wandb', action='store_true',
                         help='log training and validation metrics to wandb')
     parser.add_argument('--wandb_entity', default=None, type=str,
                         help='user or team name of wandb')
     parser.add_argument('--wandb_project', default=None, type=str,
                         help='log training and validation metrics to wandb')
+
     parser.add_argument('--debug', action='store_true')
 
     return parser
