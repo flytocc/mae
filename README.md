@@ -108,6 +108,7 @@ python main_finetune.py \
 ├── engine_finetune.py  # Finetune核心代码
 ├── engine_pretrain.py  # 预训练核心代码
 ├── layer.py  # 网络结构
+├── LICENSE
 ├── main_finetune.py  # Finetune脚本
 ├── main_linprobe.py  # LinearProbing脚本
 ├── main_pretrain.py  # 预训练脚本

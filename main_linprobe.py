@@ -240,7 +240,8 @@ def main(args):
     print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
     max_accuracy = 0.0
-    for epoch in range(0 if args.debug else args.start_epoch, args.epochs):
+    for epoch in range(args.start_epoch, args.epochs):
+        data_loader_train.batch_sampler.set_epoch(epoch)
         if log_writer is not None:
             num_training_steps_per_epoch = len(dataset_train) // eff_batch_size
             log_writer.set_step(epoch * num_training_steps_per_epoch)
