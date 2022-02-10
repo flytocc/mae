@@ -1,11 +1,12 @@
-## Masked Autoencoders: A PyTorch Implementation
+# PaddlePaddle复现："Masked Autoencoders Are Scalable Vision Learners"
 
+## 1. 简介
 <p align="center">
   <img src="https://user-images.githubusercontent.com/11435359/146857310-f258c86c-fde6-48e8-9cee-badd2b21bd2c.png" width="480">
 </p>
 
+MAE是一种可扩展的计算机视觉自监督学习方法。在预训练阶段，对输入的图像随机遮挡一部分图像，并通过编码器和解码器实现重建。遮挡的部分对模型的骨干网络（即编码器）是不可见的，这可以大幅提升训练速度。这种自监督方法可以用于训练具有良好通用性的高容量，并且下游任务中的迁移性能优于有监督的预训练。
 
-This is a PyTorch/GPU re-implementation of the paper [Masked Autoencoders Are Scalable Vision Learners](https://arxiv.org/abs/2111.06377):
 ```
 @Article{MaskedAutoencoders2021,
   author  = {Kaiming He and Xinlei Chen and Saining Xie and Yanghao Li and Piotr Doll{\'a}r and Ross Girshick},
@@ -14,143 +15,120 @@ This is a PyTorch/GPU re-implementation of the paper [Masked Autoencoders Are Sc
   year    = {2021},
 }
 ```
+本仓库为基于 [官方pytorch实现](https://github.com/facebookresearch/mae) 的PaddlePaddle版本，模型与脚本与官方实现一致。
 
-* The original implementation was in TensorFlow+TPU. This re-implementation is in PyTorch+GPU.
+## 2. 复现精度
+验收标准：ViT-B，Imagenet1k val 83.6%
 
-* This repo is a modification on the [DeiT repo](https://github.com/facebookresearch/deit). Installation and preparation follow that repo.
+复现精度：ViT-B，Imagenet1k val 83.45% (1400E达到误差允许精度，1600E结果正在跑)
 
-* This repo is based on [`timm==0.3.2`](https://github.com/rwightman/pytorch-image-models), for which a [fix](https://github.com/rwightman/pytorch-image-models/issues/420#issuecomment-776459842) is needed to work with PyTorch 1.8.1+.
+预训练模型在各个阶段的精度（通过1600E Pretrain的中间checkpoint进行Finetune）：
 
-### Catalog
+| Epoch | 800    | 1000   | 1100   | 1200   | 1300   | 1400   | 1600    |
+| ----- | ------ | ------ | ------ | ------ | ------ | ------ | ------- |
+| TOP1  | 82.44% | 82.87% | 82.93% | 83.12% | 83.29% | 83.45% | Running |
 
-- [x] Visualization demo
-- [x] Pre-trained checkpoints + fine-tuning code
-- [x] Pre-training code
+- 预训练及1600Epochs Finetune在八卡环境完成，预训练单卡显存占用30G，Finetune单卡显存占用 xG
+- 除1600E外的Finetune在AIStudio完成，4卡V100 2天（对应AIStudio项目即将开源）
 
-### Visualization demo
+## 3. 数据集
 
-Run our interactive visualization demo using [Colab notebook](https://colab.research.google.com/github/facebookresearch/mae/blob/main/demo/mae_visualize.ipynb) (no GPU needed):
-<p align="center">
-  <img src="https://user-images.githubusercontent.com/11435359/147859292-77341c70-2ed8-4703-b153-f505dcb6f2f8.png" width="600">
-</p>
+ImageNet 1K
 
-### Fine-tuning with pre-trained checkpoints
+## 4. 环境依赖
 
-The following table provides the pre-trained checkpoints used in the paper, converted from TF/TPU to PT/GPU:
-<table><tbody>
-<!-- START TABLE -->
-<!-- TABLE HEADER -->
-<th valign="bottom"></th>
-<th valign="bottom">ViT-Base</th>
-<th valign="bottom">ViT-Large</th>
-<th valign="bottom">ViT-Huge</th>
-<!-- TABLE BODY -->
-<tr><td align="left">pre-trained checkpoint</td>
-<td align="center"><a href="https://dl.fbaipublicfiles.com/mae/pretrain/mae_pretrain_vit_base.pth">download</a></td>
-<td align="center"><a href="https://dl.fbaipublicfiles.com/mae/pretrain/mae_pretrain_vit_large.pth">download</a></td>
-<td align="center"><a href="https://dl.fbaipublicfiles.com/mae/pretrain/mae_pretrain_vit_huge.pth">download</a></td>
-</tr>
-<tr><td align="left">md5</td>
-<td align="center"><tt>8cad7c</tt></td>
-<td align="center"><tt>b8b06e</tt></td>
-<td align="center"><tt>9bdbb0</tt></td>
-</tr>
-</tbody></table>
+- python 3.8.12
+- paddlepaddle-gpu-2.2.1
+- CUDA 11.5
+- 其余依赖详见 `requirements.txt`
 
-The fine-tuning instruction is in [FINETUNE.md](FINETUNE.md).
+## 5. 快速开始
 
-By fine-tuning these pre-trained models, we rank #1 in these classification tasks (detailed in the paper):
-<table><tbody>
-<!-- START TABLE -->
-<!-- TABLE HEADER -->
-<th valign="bottom"></th>
-<th valign="bottom">ViT-B</th>
-<th valign="bottom">ViT-L</th>
-<th valign="bottom">ViT-H</th>
-<th valign="bottom">ViT-H<sub>448</sub></th>
-<td valign="bottom" style="color:#C0C0C0">prev best</td>
-<!-- TABLE BODY -->
-<tr><td align="left">ImageNet-1K (no external data)</td>
-<td align="center">83.6</td>
-<td align="center">85.9</td>
-<td align="center">86.9</td>
-<td align="center"><b>87.8</b></td>
-<td align="center" style="color:#C0C0C0">87.1</td>
-</tr>
-<td colspan="5"><font size="1"><em>following are evaluation of the same model weights (fine-tuned in original ImageNet-1K):</em></font></td>
-<tr>
-</tr>
-<tr><td align="left">ImageNet-Corruption (error rate) </td>
-<td align="center">51.7</td>
-<td align="center">41.8</td>
-<td align="center"><b>33.8</b></td>
-<td align="center">36.8</td>
-<td align="center" style="color:#C0C0C0">42.5</td>
-</tr>
-<tr><td align="left">ImageNet-Adversarial</td>
-<td align="center">35.9</td>
-<td align="center">57.1</td>
-<td align="center">68.2</td>
-<td align="center"><b>76.7</b></td>
-<td align="center" style="color:#C0C0C0">35.8</td>
-</tr>
-<tr><td align="left">ImageNet-Rendition</td>
-<td align="center">48.3</td>
-<td align="center">59.9</td>
-<td align="center">64.4</td>
-<td align="center"><b>66.5</b></td>
-<td align="center" style="color:#C0C0C0">48.7</td>
-</tr>
-<tr><td align="left">ImageNet-Sketch</td>
-<td align="center">34.5</td>
-<td align="center">45.3</td>
-<td align="center">49.6</td>
-<td align="center"><b>50.9</b></td>
-<td align="center" style="color:#C0C0C0">36.0</td>
-</tr>
-<td colspan="5"><font size="1"><em>following are transfer learning by fine-tuning the pre-trained MAE on the target dataset:</em></font></td>
-</tr>
-<tr><td align="left">iNaturalists 2017</td>
-<td align="center">70.5</td>
-<td align="center">75.7</td>
-<td align="center">79.3</td>
-<td align="center"><b>83.4</b></td>
-<td align="center" style="color:#C0C0C0">75.4</td>
-</tr>
-<tr><td align="left">iNaturalists 2018</td>
-<td align="center">75.4</td>
-<td align="center">80.1</td>
-<td align="center">83.0</td>
-<td align="center"><b>86.8</b></td>
-<td align="center" style="color:#C0C0C0">81.2</td>
-</tr>
-<tr><td align="left">iNaturalists 2019</td>
-<td align="center">80.5</td>
-<td align="center">83.4</td>
-<td align="center">85.7</td>
-<td align="center"><b>88.3</b></td>
-<td align="center" style="color:#C0C0C0">84.1</td>
-</tr>
-<tr><td align="left">Places205</td>
-<td align="center">63.9</td>
-<td align="center">65.8</td>
-<td align="center">65.9</td>
-<td align="center"><b>66.8</b></td>
-<td align="center" style="color:#C0C0C0">66.0</td>
-</tr>
-<tr><td align="left">Places365</td>
-<td align="center">57.9</td>
-<td align="center">59.4</td>
-<td align="center">59.8</td>
-<td align="center"><b>60.3</b></td>
-<td align="center" style="color:#C0C0C0">58.0</td>
-</tr>
-</tbody></table>
+训练超参与官方完全一致。
 
-### Pre-training
+### Pretrain
 
-The pre-training instruction is in [PRETRAIN.md](PRETRAIN.md).
+```
+python -m paddle.distributed.launch --gpus="0,1,2,3,4,5,6,7" main_pretrain.py \
+	--accum_iter 2 \
+	--batch_size 256 \
+	--model mae_vit_base_patch16 \
+	--norm_pix_loss \
+	--mask_ratio 0.75 \
+	--epochs 1600 \
+	--warmup_epochs 40 \
+	--blr 1.5e-4 --weight_decay 0.05 \
+	--data_path ${IMAGENET_DIR}
+```
 
-### License
+### Finetune
 
-This project is under the CC-BY-NC 4.0 license. See [LICENSE](LICENSE) for details.
+```
+python -m paddle.distributed.launch --gpus="0,1,2,3,4,5,6,7" main_finetune.py \
+  --accum_iter 1 \
+  --batch_size 128 \
+  --model vit_base_patch16 \
+  --finetune ${PRETRAIN_CHKPT} \
+  --epochs 100 \
+  --blr 5e-4 --layer_decay 0.65 \
+  --weight_decay 0.05 --drop_path 0.1 --reprob 0.25 --mixup 0.8 --cutmix 1.0 \
+  --data_path ${IMAGENET_DIR} --dist_eval
+```
+
+### Linprobe
+
+```
+python -m paddle.distributed.launch --gpus="0,1,2,3,4,5,6,7" main_linprobe.py \
+  --accum_iter 2 \
+  --batch_size 1024 \
+  --model vit_base_patch16 --cls_token \
+  --finetune ${PRETRAIN_CHKPT} \
+  --epochs 90 \
+  --blr 0.1 \
+  --weight_decay 0.0 \
+  --data_path ${IMAGENET_DIR} --dist_eval
+```
+
+### Evaluation
+
+Finetune模型下载：[百度网盘](https://pan.baidu.com/s/1SqmQNhzCrbt6HtpRl4ozwA) 75on
+
+```
+python main_finetune.py \
+  --batch_size 16 \
+  --model vit_base_patch16 \
+  --resume ${FINETUNED_CHKPT} \
+  --data_path ${IMAGENET_DIR} --eval
+```
+
+## 6.代码结构
+
+```
+├── util # 功能性代码
+├── engine_finetune.py  # Finetune核心代码
+├── engine_pretrain.py  # 预训练核心代码
+├── layer.py  # 网络结构
+├── main_finetune.py  # Finetune脚本
+├── main_linprobe.py  # LinearProbing脚本
+├── main_pretrain.py  # 预训练脚本
+├── models_mae.py  # mae预训练网络结构
+├── models_vit.py  # ViT
+├── README.md
+├── requirements.txt
+```
+
+## 7. 模型信息
+
+|      模型       |           权重            |       训练日志       |
+| :------------: | :----------------------: | :-----------------: |
+| Pretrain 1600E | pretrain_vit-b_1600e.pd  |     pretrain.log    |
+| Finetune 1600E |         running          |       running       |
+||
+| Pretrain 1400E | pretrain_vit-b_1400e.pd  |       同1600E       |
+| Finetune 1400E | finetuned_vit-b_1400e.pd | Finetuned_1400e.log |
+
+权重及训练日志下载地址：[百度网盘](https://pan.baidu.com/s/1SqmQNhzCrbt6HtpRl4ozwA) 75on
+
+## 8. License
+
+[CC-BY-NC 4.0 license](LICENSE)
