@@ -152,7 +152,7 @@ def main(args):
     print("accumulate grad iterations: %d" % args.accum_iter)
     print("effective batch size: %d" % eff_batch_size)
 
-    model = paddle.DataParallel(model, find_unused_parameters=True)
+    model = paddle.DataParallel(model)
     model_without_ddp = model._layers
 
     # following timm: set wd as 0 for bias and norm layers
