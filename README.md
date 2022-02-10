@@ -20,7 +20,7 @@ MAE是一种可扩展的计算机视觉自监督学习方法。在预训练阶�
 ## 2. 复现精度
 验收标准：ViT-B，Imagenet1k val 83.6%
 
-复现精度：ViT-B，Imagenet1k val 83.45% (1400E达到误差允许精度，1600E结果正在跑)
+复现精度：ViT-B，Imagenet1k val 83.454% (1400E结果，达到误差允许精度，1600E comming soon)
 
 预训练模型在各个阶段的精度（通过1600E Pretrain的中间checkpoint进行Finetune）：
 
@@ -28,8 +28,9 @@ MAE是一种可扩展的计算机视觉自监督学习方法。在预训练阶�
 | ----- | ------ | ------ | ------ | ------ | ------ | ------ | ------- |
 | TOP1  | 82.44% | 82.87% | 82.93% | 83.12% | 83.29% | 83.45% | Running |
 
-- 预训练及1600Epochs Finetune在八卡环境完成，预训练单卡显存占用30G，Finetune单卡显存占用 xG
+- 预训练及1600Epochs Finetune在八卡环境完成，预训练单卡显存占用30G，Finetune单卡显存占用22G
 - 除1600E外的Finetune在AIStudio完成，4卡V100 2天（对应AIStudio项目即将开源）
+- 1400E Finetune 由于AIStudio运行的代码保存checkpoint逻辑有问题，为能保存精度最高的模型，在91epoch时中断转为本地训练
 
 ## 3. 数据集
 
@@ -94,11 +95,12 @@ python -m paddle.distributed.launch --gpus="0,1,2,3,4,5,6,7" main_linprobe.py \
 Finetune模型下载：[百度网盘](https://pan.baidu.com/s/1SqmQNhzCrbt6HtpRl4ozwA) 75on
 
 ```
-python main_finetune.py \
-  --batch_size 16 \
+python -m paddle.distributed.launch --gpus="0,1,2,3,4,5,6,7" main_finetune.py \
+  --batch_size 128 \
   --model vit_base_patch16 \
   --resume ${FINETUNED_CHKPT} \
-  --data_path ${IMAGENET_DIR} --eval
+  --data_path ${IMAGENET_DIR} \
+  --dist_eval --eval
 ```
 
 ## 6.代码结构
@@ -128,7 +130,7 @@ python main_finetune.py \
 | Pretrain 1400E | pretrain_vit-b_1400e.pd  |       同1600E       |
 | Finetune 1400E | finetuned_vit-b_1400e.pd | Finetuned_1400e.log |
 
-权重及训练日志下载地址：[百度网盘](https://pan.baidu.com/s/1SqmQNhzCrbt6HtpRl4ozwA) 75on
+权重及训练日志下载地址：[百度网盘](https://pan.baidu.com/s/1SqmQNhzCrbt6HtpRl4ozwA) （提取码：75on）
 
 ## 8. License
 
